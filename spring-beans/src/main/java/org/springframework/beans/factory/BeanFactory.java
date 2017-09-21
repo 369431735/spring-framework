@@ -137,6 +137,12 @@ public interface BeanFactory {
 	 * with the specified name
 	 * @throws BeansException if the bean could not be obtained
 	 */
+	/***
+	 * 根据bean的名字获取bean在IOC容器中的实例
+	 * @param name
+	 * @return
+	 * @throws BeansException
+	 */
 	Object getBean(String name) throws BeansException;
 
 	/**
@@ -156,6 +162,14 @@ public interface BeanFactory {
 	 * @throws NoSuchBeanDefinitionException if there is no such bean definition
 	 * @throws BeanNotOfRequiredTypeException if the bean is not of the required type
 	 * @throws BeansException if the bean could not be created
+	 */
+	/***
+	 * 根据bean的名字和类型获取bean在IOC容器中的实例，增加了类的安全机制
+	 * @param name
+	 * @param requiredType
+	 * @param <T>
+	 * @return
+	 * @throws BeansException
 	 */
 	<T> T getBean(String name, @Nullable Class<T> requiredType) throws BeansException;
 
@@ -189,6 +203,13 @@ public interface BeanFactory {
 	 * @throws BeansException if the bean could not be created
 	 * @since 3.0
 	 * @see ListableBeanFactory
+	 */
+	/**
+	 * 根据Class类型获取bean在IOC容器中的实例
+	 * @param requiredType
+	 * @param <T>
+	 * @return
+	 * @throws BeansException
 	 */
 	<T> T getBean(Class<T> requiredType) throws BeansException;
 
@@ -228,6 +249,11 @@ public interface BeanFactory {
 	 * will be able to obtain an instance for the same name.
 	 * @param name the name of the bean to query
 	 * @return whether a bean with the given name is present
+	 */
+	/***
+	 * 提供对bean的检索，判断IOC的容器中是否包含该名称的实例
+	 * @param name
+	 * @return
 	 */
 	boolean containsBean(String name);
 

@@ -48,6 +48,8 @@ import org.springframework.util.Assert;
  * @see #getResource
  * @see #getResourceByPath
  * @see GenericApplicationContext
+ *
+ * 这是spring的入口程序，是一个beanFactory
  */
 public class ClassPathXmlApplicationContext extends AbstractXmlApplicationContext {
 

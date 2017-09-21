@@ -37,6 +37,11 @@ import org.springframework.lang.Nullable;
  * @see org.springframework.beans.factory.support.RootBeanDefinition
  * @see org.springframework.beans.factory.support.ChildBeanDefinition
  */
+
+/***
+ * bean的定义
+ * 解释xml配置文件解释为java对象
+ */
 public interface BeanDefinition extends AttributeAccessor, BeanMetadataElement {
 
 	/**
