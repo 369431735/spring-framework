@@ -181,6 +181,12 @@ class PostProcessorRegistrationDelegate {
 		beanFactory.clearMetadataCache();
 	}
 
+	/***
+	 *
+	 * 注册后置处理器
+	 * @param beanFactory  bena工厂
+	 * @param applicationContext 上下文容器
+	 */
 	public static void registerBeanPostProcessors(
 			ConfigurableListableBeanFactory beanFactory, AbstractApplicationContext applicationContext) {
 

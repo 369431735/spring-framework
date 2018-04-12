@@ -126,9 +126,9 @@ public class ClassPathXmlApplicationContext extends AbstractXmlApplicationContex
 
 	/**
 	 * Create a new ClassPathXmlApplicationContext with the given parent,
-	 * loading the definitions from the given XML files.
+	 * loading the definitions from the given XML files.（看来只支持xml啊）
 	 * @param configLocations array of resource locations
-	 * @param refresh whether to automatically refresh the context,
+	 * @param refresh whether to automatically refresh the context, 是否需要刷新
 	 * loading all bean definitions and creating all singletons.
 	 * Alternatively, call refresh manually after further configuring the context.
 	 * @param parent the parent context

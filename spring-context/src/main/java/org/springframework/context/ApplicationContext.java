@@ -72,6 +72,7 @@ public interface ApplicationContext extends EnvironmentCapable, ListableBeanFact
 	String getId();
 
 	/**
+	 * 获取应用名
 	 * Return a name for the deployed application that this context belongs to.
 	 * @return a name for the deployed application, or the empty String by default
 	 */
