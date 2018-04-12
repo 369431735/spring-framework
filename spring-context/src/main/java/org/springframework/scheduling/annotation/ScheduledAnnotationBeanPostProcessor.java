@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,10 +17,13 @@
 package org.springframework.scheduling.annotation;
 
 import java.lang.reflect.Method;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TimeZone;
@@ -30,6 +33,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
+import org.springframework.aop.framework.AopProxyUtils;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.BeanFactoryAware;
@@ -53,12 +57,15 @@ import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.core.MethodIntrospector;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.lang.Nullable;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.Trigger;
 import org.springframework.scheduling.config.CronTask;
-import org.springframework.scheduling.config.IntervalTask;
+import org.springframework.scheduling.config.FixedDelayTask;
+import org.springframework.scheduling.config.FixedRateTask;
 import org.springframework.scheduling.config.ScheduledTask;
+import org.springframework.scheduling.config.ScheduledTaskHolder;
 import org.springframework.scheduling.config.ScheduledTaskRegistrar;
 import org.springframework.scheduling.support.CronTrigger;
 import org.springframework.scheduling.support.ScheduledMethodRunnable;
@@ -93,7 +100,7 @@ import org.springframework.util.StringValueResolver;
  * @see AsyncAnnotationBeanPostProcessor
  */
 public class ScheduledAnnotationBeanPostProcessor
-		implements MergedBeanDefinitionPostProcessor, DestructionAwareBeanPostProcessor,
+		implements ScheduledTaskHolder, MergedBeanDefinitionPostProcessor, DestructionAwareBeanPostProcessor,
 		Ordered, EmbeddedValueResolverAware, BeanNameAware, BeanFactoryAware, ApplicationContextAware,
 		SmartInitializingSingleton, ApplicationListener<ContextRefreshedEvent>, DisposableBean {
 
@@ -211,9 +218,11 @@ public class ScheduledAnnotationBeanPostProcessor
 		}
 
 		if (this.beanFactory instanceof ListableBeanFactory) {
-			Map<String, SchedulingConfigurer> configurers =
+			Map<String, SchedulingConfigurer> beans =
 					((ListableBeanFactory) this.beanFactory).getBeansOfType(SchedulingConfigurer.class);
-			for (SchedulingConfigurer configurer : configurers.values()) {
+			List<SchedulingConfigurer> configurers = new ArrayList<>(beans.values());
+			AnnotationAwareOrderComparator.sort(configurers);
+			for (SchedulingConfigurer configurer : configurers) {
 				configurer.configureTasks(this.registrar);
 			}
 		}
@@ -304,7 +313,7 @@ public class ScheduledAnnotationBeanPostProcessor
 
 	@Override
 	public Object postProcessAfterInitialization(final Object bean, String beanName) {
-		Class<?> targetClass = AopUtils.getTargetClass(bean);
+		Class<?> targetClass = AopProxyUtils.ultimateTargetClass(bean);
 		if (!this.nonAnnotatedClasses.contains(targetClass)) {
 			Map<Method, Set<Scheduled>> annotatedMethods = MethodIntrospector.selectMethods(targetClass,
 					(MethodIntrospector.MetadataLookup<Set<Scheduled>>) method -> {
@@ -354,11 +363,11 @@ public class ScheduledAnnotationBeanPostProcessor
 				}
 				if (StringUtils.hasLength(initialDelayString)) {
 					try {
-						initialDelay = Long.parseLong(initialDelayString);
+						initialDelay = parseDelayAsLong(initialDelayString);
 					}
-					catch (NumberFormatException ex) {
+					catch (RuntimeException ex) {
 						throw new IllegalArgumentException(
-								"Invalid initialDelayString value \"" + initialDelayString + "\" - cannot parse into integer");
+								"Invalid initialDelayString value \"" + initialDelayString + "\" - cannot parse into long");
 					}
 				}
 			}
@@ -395,7 +404,7 @@ public class ScheduledAnnotationBeanPostProcessor
 			if (fixedDelay >= 0) {
 				Assert.isTrue(!processedSchedule, errorMessage);
 				processedSchedule = true;
-				tasks.add(this.registrar.scheduleFixedDelayTask(new IntervalTask(runnable, fixedDelay, initialDelay)));
+				tasks.add(this.registrar.scheduleFixedDelayTask(new FixedDelayTask(runnable, fixedDelay, initialDelay)));
 			}
 			String fixedDelayString = scheduled.fixedDelayString();
 			if (StringUtils.hasText(fixedDelayString)) {
@@ -406,13 +415,13 @@ public class ScheduledAnnotationBeanPostProcessor
 					Assert.isTrue(!processedSchedule, errorMessage);
 					processedSchedule = true;
 					try {
-						fixedDelay = Long.parseLong(fixedDelayString);
+						fixedDelay = parseDelayAsLong(fixedDelayString);
 					}
-					catch (NumberFormatException ex) {
+					catch (RuntimeException ex) {
 						throw new IllegalArgumentException(
 								"Invalid fixedDelayString value \"" + fixedDelayString + "\" - cannot parse into long");
 					}
-					tasks.add(this.registrar.scheduleFixedDelayTask(new IntervalTask(runnable, fixedDelay, initialDelay)));
+					tasks.add(this.registrar.scheduleFixedDelayTask(new FixedDelayTask(runnable, fixedDelay, initialDelay)));
 				}
 			}
 
@@ -421,7 +430,7 @@ public class ScheduledAnnotationBeanPostProcessor
 			if (fixedRate >= 0) {
 				Assert.isTrue(!processedSchedule, errorMessage);
 				processedSchedule = true;
-				tasks.add(this.registrar.scheduleFixedRateTask(new IntervalTask(runnable, fixedRate, initialDelay)));
+				tasks.add(this.registrar.scheduleFixedRateTask(new FixedRateTask(runnable, fixedRate, initialDelay)));
 			}
 			String fixedRateString = scheduled.fixedRateString();
 			if (StringUtils.hasText(fixedRateString)) {
@@ -432,13 +441,13 @@ public class ScheduledAnnotationBeanPostProcessor
 					Assert.isTrue(!processedSchedule, errorMessage);
 					processedSchedule = true;
 					try {
-						fixedRate = Long.parseLong(fixedRateString);
+						fixedRate = parseDelayAsLong(fixedRateString);
 					}
-					catch (NumberFormatException ex) {
+					catch (RuntimeException ex) {
 						throw new IllegalArgumentException(
-								"Invalid fixedRateString value \"" + fixedRateString + "\" - cannot parse into integer");
+								"Invalid fixedRateString value \"" + fixedRateString + "\" - cannot parse into long");
 					}
-					tasks.add(this.registrar.scheduleFixedRateTask(new IntervalTask(runnable, fixedRate, initialDelay)));
+					tasks.add(this.registrar.scheduleFixedRateTask(new FixedRateTask(runnable, fixedRate, initialDelay)));
 				}
 			}
 
@@ -461,6 +470,35 @@ public class ScheduledAnnotationBeanPostProcessor
 		}
 	}
 
+	private static long parseDelayAsLong(String value) throws RuntimeException {
+		if (value.length() > 1 && (isP(value.charAt(0)) || isP(value.charAt(1)))) {
+			return Duration.parse(value).toMillis();
+		}
+		return Long.parseLong(value);
+	}
+
+	private static boolean isP(char ch) {
+		return (ch == 'P' || ch == 'p');
+	}
+
+
+	/**
+	 * Return all currently scheduled tasks, from {@link Scheduled} methods
+	 * as well as from programmatic {@link SchedulingConfigurer} interaction.
+	 * @since 5.0.2
+	 */
+	@Override
+	public Set<ScheduledTask> getScheduledTasks() {
+		Set<ScheduledTask> result = new LinkedHashSet<>();
+		synchronized (this.scheduledTasks) {
+			Collection<Set<ScheduledTask>> allTasks = this.scheduledTasks.values();
+			for (Set<ScheduledTask> tasks : allTasks) {
+				result.addAll(tasks);
+			}
+		}
+		result.addAll(this.registrar.getScheduledTasks());
+		return result;
+	}
 
 	@Override
 	public void postProcessBeforeDestruction(Object bean, String beanName) {

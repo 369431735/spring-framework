@@ -92,6 +92,9 @@ public class WebHttpHandlerBuilder {
 	@Nullable
 	private LocaleContextResolver localeContextResolver;
 
+	@Nullable
+	private ApplicationContext applicationContext;
+
 
 	/**
 	 * Private constructor.
@@ -102,10 +105,18 @@ public class WebHttpHandlerBuilder {
 	}
 
 	/**
+	 * Private constructor to use when initialized from an ApplicationContext.
+	 */
+	private WebHttpHandlerBuilder(WebHandler webHandler, ApplicationContext applicationContext) {
+		Assert.notNull(webHandler, "WebHandler must not be null");
+		this.webHandler = webHandler;
+		this.applicationContext = applicationContext;
+	}
+
+	/**
 	 * Copy constructor.
 	 */
 	private WebHttpHandlerBuilder(WebHttpHandlerBuilder other) {
-
 		this.webHandler = other.webHandler;
 		this.filters.addAll(other.filters);
 		this.exceptionHandlers.addAll(other.exceptionHandlers);
@@ -128,18 +139,18 @@ public class WebHttpHandlerBuilder {
 	 * Static factory method to create a new builder instance by detecting beans
 	 * in an {@link ApplicationContext}. The following are detected:
 	 * <ul>
-	 *	<li>{@link WebHandler} [1] -- looked up by the name
-	 *	{@link #WEB_HANDLER_BEAN_NAME}.
-	 *	<li>{@link WebFilter} [0..N] -- detected by type and ordered,
-	 *	see {@link AnnotationAwareOrderComparator}.
-	 *	<li>{@link WebExceptionHandler} [0..N] -- detected by type and
-	 *	ordered.
-	 *	<li>{@link WebSessionManager} [0..1] -- looked up by the name
-	 *	{@link #WEB_SESSION_MANAGER_BEAN_NAME}.
-	 *  <li>{@link ServerCodecConfigurer} [0..1] -- looked up by the name
-	 *	{@link #SERVER_CODEC_CONFIGURER_BEAN_NAME}.
-	 *<li>{@link LocaleContextResolver} [0..1] -- looked up by the name
-	 *	{@link #LOCALE_CONTEXT_RESOLVER_BEAN_NAME}.
+	 * <li>{@link WebHandler} [1] -- looked up by the name
+	 * {@link #WEB_HANDLER_BEAN_NAME}.
+	 * <li>{@link WebFilter} [0..N] -- detected by type and ordered,
+	 * see {@link AnnotationAwareOrderComparator}.
+	 * <li>{@link WebExceptionHandler} [0..N] -- detected by type and
+	 * ordered.
+	 * <li>{@link WebSessionManager} [0..1] -- looked up by the name
+	 * {@link #WEB_SESSION_MANAGER_BEAN_NAME}.
+	 * <li>{@link ServerCodecConfigurer} [0..1] -- looked up by the name
+	 * {@link #SERVER_CODEC_CONFIGURER_BEAN_NAME}.
+	 * <li>{@link LocaleContextResolver} [0..1] -- looked up by the name
+	 * {@link #LOCALE_CONTEXT_RESOLVER_BEAN_NAME}.
 	 * </ul>
 	 * @param context the application context to use for the lookup
 	 * @return the prepared builder
@@ -147,7 +158,7 @@ public class WebHttpHandlerBuilder {
 	public static WebHttpHandlerBuilder applicationContext(ApplicationContext context) {
 
 		WebHttpHandlerBuilder builder = new WebHttpHandlerBuilder(
-				context.getBean(WEB_HANDLER_BEAN_NAME, WebHandler.class));
+				context.getBean(WEB_HANDLER_BEAN_NAME, WebHandler.class), context);
 
 		// Autowire lists for @Bean + @Order
 
@@ -277,6 +288,9 @@ public class WebHttpHandlerBuilder {
 		if (this.localeContextResolver != null) {
 			adapted.setLocaleContextResolver(this.localeContextResolver);
 		}
+		if (this.applicationContext != null) {
+			adapted.setApplicationContext(this.applicationContext);
+		}
 
 		return adapted;
 	}
@@ -296,7 +310,6 @@ public class WebHttpHandlerBuilder {
 		private List<WebFilter> filters = Collections.emptyList();
 
 		private List<WebExceptionHandler> exceptionHandlers = Collections.emptyList();
-
 
 		@Autowired(required = false)
 		public void setFilters(List<WebFilter> filters) {

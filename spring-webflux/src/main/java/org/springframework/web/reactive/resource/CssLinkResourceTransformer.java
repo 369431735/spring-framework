@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -87,8 +87,9 @@ public class CssLinkResourceTransformer extends ResourceTransformerSupport {
 					}
 
 					DataBufferFactory bufferFactory = exchange.getResponse().bufferFactory();
-					return DataBufferUtils.read(ouptputResource, bufferFactory, StreamUtils.BUFFER_SIZE)
-							.reduce(DataBuffer::write)
+					Flux<DataBuffer> flux = DataBufferUtils
+							.read(ouptputResource, bufferFactory, StreamUtils.BUFFER_SIZE);
+					return DataBufferUtils.join(flux)
 							.flatMap(dataBuffer -> {
 								CharBuffer charBuffer = DEFAULT_CHARSET.decode(dataBuffer.asByteBuffer());
 								DataBufferUtils.release(dataBuffer);
@@ -150,7 +151,7 @@ public class CssLinkResourceTransformer extends ResourceTransformerSupport {
 	}
 
 	private boolean hasScheme(String link) {
-		int schemeIndex = link.indexOf(":");
+		int schemeIndex = link.indexOf(':');
 		return (schemeIndex > 0 && !link.substring(0, schemeIndex).contains("/")) || link.indexOf("//") == 0;
 	}
 
@@ -166,7 +167,7 @@ public class CssLinkResourceTransformer extends ResourceTransformerSupport {
 	}
 
 
-	protected static abstract class AbstractLinkParser implements LinkParser {
+	protected abstract static class AbstractLinkParser implements LinkParser {
 
 		/** Return the keyword to use to search for links, e.g. "@import", "url(" */
 		protected abstract String getKeyword();

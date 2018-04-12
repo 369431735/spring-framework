@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -110,8 +110,9 @@ public class AppCacheManifestTransformer extends ResourceTransformerSupport {
 						return Mono.just(outputResource);
 					}
 					DataBufferFactory bufferFactory = exchange.getResponse().bufferFactory();
-					return DataBufferUtils.read(outputResource, bufferFactory, StreamUtils.BUFFER_SIZE)
-							.reduce(DataBuffer::write)
+					Flux<DataBuffer> flux = DataBufferUtils
+							.read(outputResource, bufferFactory, StreamUtils.BUFFER_SIZE);
+					return DataBufferUtils.join(flux)
 							.flatMap(dataBuffer -> {
 								CharBuffer charBuffer = DEFAULT_CHARSET.decode(dataBuffer.asByteBuffer());
 								DataBufferUtils.release(dataBuffer);
@@ -237,7 +238,7 @@ public class AppCacheManifestTransformer extends ResourceTransformerSupport {
 		}
 
 		private static boolean hasScheme(String line) {
-			int index = line.indexOf(":");
+			int index = line.indexOf(':');
 			return (line.startsWith("//") || (index > 0 && !line.substring(0, index).contains("/")));
 		}
 

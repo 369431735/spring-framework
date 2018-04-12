@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,14 +83,13 @@ import org.springframework.web.util.UriComponentsBuilder;
  * {@link #relativeTo(org.springframework.web.util.UriComponentsBuilder)}.
  * </ul>
  *
- * <p><strong>Note:</strong> This class extracts and uses values from the headers
- * "Forwarded" (<a href="http://tools.ietf.org/html/rfc7239">RFC 7239</a>),
- * or "X-Forwarded-Host", "X-Forwarded-Port", and "X-Forwarded-Proto" if
- * "Forwarded" is not found, in order to reflect the client-originated protocol
- * and address. As an alternative consider using the
- * {@link org.springframework.web.filter.ForwardedHeaderFilter} to have such
- * headers extracted once and removed, or removed only (without being used).
- * See the reference for further information including security considerations.
+ * <p><strong>Note:</strong> This class uses values from "Forwarded"
+ * (<a href="http://tools.ietf.org/html/rfc7239">RFC 7239</a>),
+ * "X-Forwarded-Host", "X-Forwarded-Port", and "X-Forwarded-Proto" headers,
+ * if present, in order to reflect the client-originated protocol and address.
+ * Consider using the {@code ForwardedHeaderFilter} in order to choose from a
+ * central place whether to extract and use, or to discard such headers.
+ * See the Spring Framework reference for more on this filter.
  *
  * @author Oliver Gierke
  * @author Rossen Stoyanchev
@@ -254,10 +253,8 @@ public class MvcUriComponentsBuilder {
 	 * controller.getAddressesForCountry("US")
 	 * builder = MvcUriComponentsBuilder.fromMethodCall(controller);
 	 * </pre>
-	 *
 	 * <p><strong>Note:</strong> This method extracts values from "Forwarded"
 	 * and "X-Forwarded-*" headers if found. See class-level docs.
-	 *
 	 * @param info either the value returned from a "mock" controller
 	 * invocation or the "mock" controller itself after an invocation
 	 * @return a UriComponents instance
@@ -512,12 +509,7 @@ public class MvcUriComponentsBuilder {
 		}
 
 		// We may not have all URI var values, expand only what we have
-		return builder.build().expand(new UriComponents.UriTemplateVariables() {
-			@Override
-			public Object getValue(@Nullable String name) {
-				return uriVars.containsKey(name) ? uriVars.get(name) : UriComponents.UriTemplateVariables.SKIP_VALUE;
-			}
-		});
+		return builder.build().expand(name -> uriVars.getOrDefault(name, UriComponents.UriTemplateVariables.SKIP_VALUE));
 	}
 
 	@Nullable
@@ -552,6 +544,7 @@ public class MvcUriComponentsBuilder {
 		}
 	}
 
+	@Nullable
 	private static WebApplicationContext getWebApplicationContext() {
 		RequestAttributes requestAttributes = RequestContextHolder.getRequestAttributes();
 		if (requestAttributes == null) {
@@ -615,7 +608,11 @@ public class MvcUriComponentsBuilder {
 
 	@SuppressWarnings("unchecked")
 	private static <T> T initProxy(Class<?> type, ControllerMethodInvocationInterceptor interceptor) {
-		if (type.isInterface()) {
+		if (type == Object.class) {
+			return (T) interceptor;
+		}
+
+		else if (type.isInterface()) {
 			ProxyFactory factory = new ProxyFactory(EmptyTargetSource.INSTANCE);
 			factory.addInterface(type);
 			factory.addInterface(MethodInvocationInfo.class);
@@ -714,8 +711,18 @@ public class MvcUriComponentsBuilder {
 	}
 
 
+	public interface MethodInvocationInfo {
+
+		Class<?> getControllerType();
+
+		Method getControllerMethod();
+
+		Object[] getArgumentValues();
+	}
+
+
 	private static class ControllerMethodInvocationInterceptor
-			implements org.springframework.cglib.proxy.MethodInterceptor, MethodInterceptor {
+			implements org.springframework.cglib.proxy.MethodInterceptor, MethodInterceptor, MethodInvocationInfo {
 
 		private final Class<?> controllerType;
 
@@ -732,14 +739,14 @@ public class MvcUriComponentsBuilder {
 		@Override
 		@Nullable
 		public Object intercept(Object obj, Method method, Object[] args, @Nullable MethodProxy proxy) {
-			if (method.getName().equals("getControllerMethod")) {
+			if (method.getName().equals("getControllerType")) {
+				return this.controllerType;
+			}
+			else if (method.getName().equals("getControllerMethod")) {
 				return this.controllerMethod;
 			}
 			else if (method.getName().equals("getArgumentValues")) {
 				return this.argumentValues;
-			}
-			else if (method.getName().equals("getControllerType")) {
-				return this.controllerType;
 			}
 			else if (ReflectionUtils.isObjectMethod(method)) {
 				return ReflectionUtils.invokeMethod(method, obj, args);
@@ -748,24 +755,38 @@ public class MvcUriComponentsBuilder {
 				this.controllerMethod = method;
 				this.argumentValues = args;
 				Class<?> returnType = method.getReturnType();
-				return (void.class == returnType ? null : returnType.cast(initProxy(returnType, this)));
+				try {
+					return (returnType == void.class ? null : returnType.cast(initProxy(returnType, this)));
+				}
+				catch (Throwable ex) {
+					throw new IllegalStateException(
+							"Failed to create proxy for controller method return type: " + method, ex);
+				}
 			}
 		}
 
 		@Override
+		@Nullable
 		public Object invoke(org.aopalliance.intercept.MethodInvocation inv) throws Throwable {
 			return intercept(inv.getThis(), inv.getMethod(), inv.getArguments(), null);
 		}
-	}
 
+		@Override
+		public Class<?> getControllerType() {
+			return this.controllerType;
+		}
 
-	public interface MethodInvocationInfo {
+		@Override
+		public Method getControllerMethod() {
+			Assert.state(this.controllerMethod != null, "Not initialized yet");
+			return this.controllerMethod;
+		}
 
-		Method getControllerMethod();
-
-		Object[] getArgumentValues();
-
-		Class<?> getControllerType();
+		@Override
+		public Object[] getArgumentValues() {
+			Assert.state(this.argumentValues != null, "Not initialized yet");
+			return this.argumentValues;
+		}
 	}
 
 

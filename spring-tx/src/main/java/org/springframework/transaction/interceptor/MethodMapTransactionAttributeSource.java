@@ -122,7 +122,7 @@ public class MethodMapTransactionAttributeSource
 	 */
 	public void addTransactionalMethod(String name, TransactionAttribute attr) {
 		Assert.notNull(name, "Name must not be null");
-		int lastDotIndex = name.lastIndexOf(".");
+		int lastDotIndex = name.lastIndexOf('.');
 		if (lastDotIndex == -1) {
 			throw new IllegalArgumentException("'" + name + "' is not a valid method name: format is FQN.methodName");
 		}
@@ -207,6 +207,7 @@ public class MethodMapTransactionAttributeSource
 
 
 	@Override
+	@Nullable
 	public TransactionAttribute getTransactionAttribute(Method method, @Nullable Class<?> targetClass) {
 		if (this.eagerlyInitialized) {
 			return this.transactionAttributeMap.get(method);

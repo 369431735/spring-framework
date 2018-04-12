@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import org.springframework.http.HttpStatus;
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 import static org.springframework.http.HttpMethod.GET;
+import static org.springframework.web.reactive.function.client.ExchangeFilterFunctions.Credentials.basicAuthenticationCredentials;
 
 /**
  * @author Arjen Poutsma
@@ -35,8 +36,8 @@ import static org.springframework.http.HttpMethod.GET;
 public class ExchangeFilterFunctionsTests {
 
 	@Test
-	public void andThen() throws Exception {
-		ClientRequest request = ClientRequest.method(GET, URI.create("http://example.com")).build();
+	public void andThen() {
+		ClientRequest request = ClientRequest.create(GET, URI.create("http://example.com")).build();
 		ClientResponse response = mock(ClientResponse.class);
 		ExchangeFunction exchange = r -> Mono.just(response);
 
@@ -65,8 +66,8 @@ public class ExchangeFilterFunctionsTests {
 	}
 
 	@Test
-	public void apply() throws Exception {
-		ClientRequest request = ClientRequest.method(GET, URI.create("http://example.com")).build();
+	public void apply() {
+		ClientRequest request = ClientRequest.create(GET, URI.create("http://example.com")).build();
 		ClientResponse response = mock(ClientResponse.class);
 		ExchangeFunction exchange = r -> Mono.just(response);
 
@@ -84,8 +85,8 @@ public class ExchangeFilterFunctionsTests {
 	}
 
 	@Test
-	public void basicAuthentication() throws Exception {
-		ClientRequest request = ClientRequest.method(GET, URI.create("http://example.com")).build();
+	public void basicAuthenticationUsernamePassword() {
+		ClientRequest request = ClientRequest.create(GET, URI.create("http://example.com")).build();
 		ClientResponse response = mock(ClientResponse.class);
 
 		ExchangeFunction exchange = r -> {
@@ -100,11 +101,17 @@ public class ExchangeFilterFunctionsTests {
 		assertEquals(response, result);
 	}
 
+	@Test(expected = IllegalArgumentException.class)
+	public void basicAuthenticationInvalidCharacters() {
+
+		ExchangeFilterFunctions.basicAuthentication("foo", "\ud83d\udca9");
+	}
+
 	@Test
-	public void basicAuthenticationAttributes() throws Exception {
-		ClientRequest request = ClientRequest.method(GET, URI.create("http://example.com"))
-				.attribute(ExchangeFilterFunctions.USERNAME_ATTRIBUTE, "foo")
-				.attribute(ExchangeFilterFunctions.PASSWORD_ATTRIBUTE, "bar").build();
+	public void basicAuthenticationAttributes() {
+		ClientRequest request = ClientRequest.create(GET, URI.create("http://example.com"))
+				.attributes(basicAuthenticationCredentials("foo", "bar"))
+				.build();
 		ClientResponse response = mock(ClientResponse.class);
 
 		ExchangeFunction exchange = r -> {
@@ -120,8 +127,8 @@ public class ExchangeFilterFunctionsTests {
 	}
 
 	@Test
-	public void basicAuthenticationAbsentAttributes() throws Exception {
-		ClientRequest request = ClientRequest.method(GET, URI.create("http://example.com")).build();
+	public void basicAuthenticationAbsentAttributes() {
+		ClientRequest request = ClientRequest.create(GET, URI.create("http://example.com")).build();
 		ClientResponse response = mock(ClientResponse.class);
 
 		ExchangeFunction exchange = r -> {
@@ -136,8 +143,8 @@ public class ExchangeFilterFunctionsTests {
 	}
 
 	@Test
-	public void statusHandlerMatch() throws Exception {
-		ClientRequest request = ClientRequest.method(GET, URI.create("http://example.com")).build();
+	public void statusHandlerMatch() {
+		ClientRequest request = ClientRequest.create(GET, URI.create("http://example.com")).build();
 		ClientResponse response = mock(ClientResponse.class);
 		when(response.statusCode()).thenReturn(HttpStatus.NOT_FOUND);
 
@@ -154,8 +161,8 @@ public class ExchangeFilterFunctionsTests {
 	}
 
 	@Test
-	public void statusHandlerNoMatch() throws Exception {
-		ClientRequest request = ClientRequest.method(GET, URI.create("http://example.com")).build();
+	public void statusHandlerNoMatch() {
+		ClientRequest request = ClientRequest.create(GET, URI.create("http://example.com")).build();
 		ClientResponse response = mock(ClientResponse.class);
 		when(response.statusCode()).thenReturn(HttpStatus.NOT_FOUND);
 

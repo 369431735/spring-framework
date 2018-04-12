@@ -23,15 +23,16 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.websocket.Endpoint;
+import javax.websocket.server.ServerContainer;
 
 import org.apache.tomcat.websocket.server.WsServerContainer;
 import reactor.core.publisher.Mono;
 
 import org.springframework.core.io.buffer.DataBufferFactory;
+import org.springframework.http.server.reactive.AbstractServerHttpRequest;
+import org.springframework.http.server.reactive.AbstractServerHttpResponse;
 import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpResponse;
-import org.springframework.http.server.reactive.ServletServerHttpRequest;
-import org.springframework.http.server.reactive.ServletServerHttpResponse;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.web.reactive.socket.HandshakeInfo;
@@ -52,8 +53,79 @@ public class TomcatRequestUpgradeStrategy implements RequestUpgradeStrategy {
 	private static final String SERVER_CONTAINER_ATTR = "javax.websocket.server.ServerContainer";
 
 
+	@Nullable
+	private Long asyncSendTimeout;
+
+	@Nullable
+	private Long maxSessionIdleTimeout;
+
+	@Nullable
+	private Integer maxTextMessageBufferSize;
+
+	@Nullable
+	private Integer maxBinaryMessageBufferSize;
+
+	@Nullable
+	private WsServerContainer serverContainer;
+
+
+	/**
+	 * Exposes the underlying config option on
+	 * {@link javax.websocket.server.ServerContainer#setAsyncSendTimeout(long)}.
+	 */
+	public void setAsyncSendTimeout(Long timeoutInMillis) {
+		this.asyncSendTimeout = timeoutInMillis;
+	}
+
+	@Nullable
+	public Long getAsyncSendTimeout() {
+		return this.asyncSendTimeout;
+	}
+
+	/**
+	 * Exposes the underlying config option on
+	 * {@link javax.websocket.server.ServerContainer#setDefaultMaxSessionIdleTimeout(long)}.
+	 */
+	public void setMaxSessionIdleTimeout(Long timeoutInMillis) {
+		this.maxSessionIdleTimeout = timeoutInMillis;
+	}
+
+	@Nullable
+	public Long getMaxSessionIdleTimeout() {
+		return this.maxSessionIdleTimeout;
+	}
+
+	/**
+	 * Exposes the underlying config option on
+	 * {@link javax.websocket.server.ServerContainer#setDefaultMaxTextMessageBufferSize(int)}.
+	 */
+	public void setMaxTextMessageBufferSize(Integer bufferSize) {
+		this.maxTextMessageBufferSize = bufferSize;
+	}
+
+	@Nullable
+	public Integer getMaxTextMessageBufferSize() {
+		return this.maxTextMessageBufferSize;
+	}
+
+	/**
+	 * Exposes the underlying config option on
+	 * {@link javax.websocket.server.ServerContainer#setDefaultMaxBinaryMessageBufferSize(int)}.
+	 */
+	public void setMaxBinaryMessageBufferSize(Integer bufferSize) {
+		this.maxBinaryMessageBufferSize = bufferSize;
+	}
+
+	@Nullable
+	public Integer getMaxBinaryMessageBufferSize() {
+		return this.maxBinaryMessageBufferSize;
+	}
+
+
 	@Override
-	public Mono<Void> upgrade(ServerWebExchange exchange, WebSocketHandler handler, @Nullable String subProtocol){
+	public Mono<Void> upgrade(ServerWebExchange exchange, WebSocketHandler handler,
+			@Nullable String subProtocol){
+
 		ServerHttpRequest request = exchange.getRequest();
 		ServerHttpResponse response = exchange.getResponse();
 
@@ -69,7 +141,8 @@ public class TomcatRequestUpgradeStrategy implements RequestUpgradeStrategy {
 
 		String requestURI = servletRequest.getRequestURI();
 		DefaultServerEndpointConfig config = new DefaultServerEndpointConfig(requestURI, endpoint);
-		config.setSubprotocols(subProtocol != null ? Collections.singletonList(subProtocol) : Collections.emptyList());
+		config.setSubprotocols(subProtocol != null ?
+				Collections.singletonList(subProtocol) : Collections.emptyList());
 
 		try {
 			WsServerContainer container = getContainer(servletRequest);
@@ -83,13 +156,13 @@ public class TomcatRequestUpgradeStrategy implements RequestUpgradeStrategy {
 	}
 
 	private HttpServletRequest getHttpServletRequest(ServerHttpRequest request) {
-		Assert.isInstanceOf(ServletServerHttpRequest.class, request, "ServletServerHttpRequest required");
-		return ((ServletServerHttpRequest) request).getServletRequest();
+		Assert.isInstanceOf(AbstractServerHttpRequest.class, request, "ServletServerHttpRequest required");
+		return ((AbstractServerHttpRequest) request).getNativeRequest();
 	}
 
 	private HttpServletResponse getHttpServletResponse(ServerHttpResponse response) {
-		Assert.isInstanceOf(ServletServerHttpResponse.class, response, "ServletServerHttpResponse required");
-		return ((ServletServerHttpResponse) response).getServletResponse();
+		Assert.isInstanceOf(AbstractServerHttpResponse.class, response, "ServletServerHttpResponse required");
+		return ((AbstractServerHttpResponse) response).getNativeResponse();
 	}
 
 	private HandshakeInfo getHandshakeInfo(ServerWebExchange exchange, @Nullable String protocol) {
@@ -99,10 +172,29 @@ public class TomcatRequestUpgradeStrategy implements RequestUpgradeStrategy {
 	}
 
 	private WsServerContainer getContainer(HttpServletRequest request) {
-		Object container = request.getServletContext().getAttribute(SERVER_CONTAINER_ATTR);
-		Assert.state(container instanceof WsServerContainer,
-				"No 'javax.websocket.server.ServerContainer' ServletContext attribute in a Tomcat container");
-		return (WsServerContainer) container;
+		if (this.serverContainer == null) {
+			Object container = request.getServletContext().getAttribute(SERVER_CONTAINER_ATTR);
+			Assert.state(container instanceof WsServerContainer,
+					"ServletContext attribute 'javax.websocket.server.ServerContainer' not found.");
+			this.serverContainer = (WsServerContainer) container;
+			initServerContainer(this.serverContainer);
+		}
+		return this.serverContainer;
+	}
+
+	private void initServerContainer(ServerContainer serverContainer) {
+		if (this.asyncSendTimeout != null) {
+			serverContainer.setAsyncSendTimeout(this.asyncSendTimeout);
+		}
+		if (this.maxSessionIdleTimeout != null) {
+			serverContainer.setDefaultMaxSessionIdleTimeout(this.maxSessionIdleTimeout);
+		}
+		if (this.maxTextMessageBufferSize != null) {
+			serverContainer.setDefaultMaxTextMessageBufferSize(this.maxTextMessageBufferSize);
+		}
+		if (this.maxBinaryMessageBufferSize != null) {
+			serverContainer.setDefaultMaxBinaryMessageBufferSize(this.maxBinaryMessageBufferSize);
+		}
 	}
 
 }

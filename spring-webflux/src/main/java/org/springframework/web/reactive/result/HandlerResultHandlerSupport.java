@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package org.springframework.web.reactive.result;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -116,6 +115,11 @@ public abstract class HandlerResultHandlerSupport implements Ordered {
 	protected MediaType selectMediaType(ServerWebExchange exchange,
 			Supplier<List<MediaType>> producibleTypesSupplier) {
 
+		MediaType contentType = exchange.getResponse().getHeaders().getContentType();
+		if (contentType != null && contentType.isConcrete()) {
+			return contentType;
+		}
+
 		List<MediaType> acceptableTypes = getAcceptableTypes(exchange);
 		List<MediaType> producibleTypes = getProducibleTypes(exchange, producibleTypesSupplier);
 
@@ -144,8 +148,7 @@ public abstract class HandlerResultHandlerSupport implements Ordered {
 	}
 
 	private List<MediaType> getAcceptableTypes(ServerWebExchange exchange) {
-		List<MediaType> mediaTypes = getContentTypeResolver().resolveMediaTypes(exchange);
-		return (mediaTypes.isEmpty() ? Collections.singletonList(MediaType.ALL) : mediaTypes);
+		return getContentTypeResolver().resolveMediaTypes(exchange);
 	}
 
 	@SuppressWarnings("unchecked")

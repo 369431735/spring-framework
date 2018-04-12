@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@ package org.springframework.messaging.simp.broker;
 import java.security.Principal;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
@@ -157,10 +156,9 @@ public class SimpleBrokerMessageHandler extends AbstractBrokerMessageHandler {
 	 * <p>By default this is not set.
 	 * @since 4.2
 	 */
-	public void setTaskScheduler(TaskScheduler taskScheduler) {
-		Assert.notNull(taskScheduler, "TaskScheduler must not be null");
+	public void setTaskScheduler(@Nullable TaskScheduler taskScheduler) {
 		this.taskScheduler = taskScheduler;
-		if (this.heartbeatValue == null) {
+		if (taskScheduler != null && this.heartbeatValue == null) {
 			this.heartbeatValue = new long[] {10000, 10000};
 		}
 	}
@@ -183,8 +181,8 @@ public class SimpleBrokerMessageHandler extends AbstractBrokerMessageHandler {
 	 * (in milliseconds).
 	 * @since 4.2
 	 */
-	public void setHeartbeatValue(long[] heartbeat) {
-		if (heartbeat.length != 2 || heartbeat[0] < 0 || heartbeat[1] < 0) {
+	public void setHeartbeatValue(@Nullable long[] heartbeat) {
+		if (heartbeat != null && (heartbeat.length != 2 || heartbeat[0] < 0 || heartbeat[1] < 0)) {
 			throw new IllegalArgumentException("Invalid heart-beat: " + Arrays.toString(heartbeat));
 		}
 		this.heartbeatValue = heartbeat;
@@ -205,7 +203,7 @@ public class SimpleBrokerMessageHandler extends AbstractBrokerMessageHandler {
 	 * <p>By default this property is not set.
 	 * @since 4.1
 	 */
-	public void setHeaderInitializer(MessageHeaderInitializer headerInitializer) {
+	public void setHeaderInitializer(@Nullable MessageHeaderInitializer headerInitializer) {
 		this.headerInitializer = headerInitializer;
 	}
 
@@ -261,7 +259,6 @@ public class SimpleBrokerMessageHandler extends AbstractBrokerMessageHandler {
 		SimpMessageType messageType = SimpMessageHeaderAccessor.getMessageType(headers);
 		String destination = SimpMessageHeaderAccessor.getDestination(headers);
 		String sessionId = SimpMessageHeaderAccessor.getSessionId(headers);
-		Principal user = SimpMessageHeaderAccessor.getUser(headers);
 
 		updateSessionReadTime(sessionId);
 
@@ -278,6 +275,7 @@ public class SimpleBrokerMessageHandler extends AbstractBrokerMessageHandler {
 			if (sessionId != null) {
 				long[] clientHeartbeat = SimpMessageHeaderAccessor.getHeartbeat(headers);
 				long[] serverHeartbeat = getHeartbeatValue();
+				Principal user = SimpMessageHeaderAccessor.getUser(headers);
 				this.sessions.put(sessionId, new SessionInfo(sessionId, user, clientHeartbeat, serverHeartbeat));
 				SimpMessageHeaderAccessor connectAck = SimpMessageHeaderAccessor.create(SimpMessageType.CONNECT_ACK);
 				initHeaders(connectAck);
@@ -294,6 +292,7 @@ public class SimpleBrokerMessageHandler extends AbstractBrokerMessageHandler {
 		else if (SimpMessageType.DISCONNECT.equals(messageType)) {
 			logMessage(message);
 			if (sessionId != null) {
+				Principal user = SimpMessageHeaderAccessor.getUser(headers);
 				handleDisconnect(sessionId, user, message);
 			}
 		}
@@ -352,11 +351,11 @@ public class SimpleBrokerMessageHandler extends AbstractBrokerMessageHandler {
 			logger.debug("Broadcasting to " + subscriptions.size() + " sessions.");
 		}
 		long now = System.currentTimeMillis();
-		for (Map.Entry<String, List<String>> subscriptionEntry : subscriptions.entrySet()) {
-			for (String subscriptionId : subscriptionEntry.getValue()) {
+		subscriptions.forEach((sessionId, subscriptionIds) -> {
+			for (String subscriptionId : subscriptionIds) {
 				SimpMessageHeaderAccessor headerAccessor = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);
 				initHeaders(headerAccessor);
-				headerAccessor.setSessionId(subscriptionEntry.getKey());
+				headerAccessor.setSessionId(sessionId);
 				headerAccessor.setSubscriptionId(subscriptionId);
 				headerAccessor.copyHeadersIfAbsent(message.getHeaders());
 				Object payload = message.getPayload();
@@ -365,16 +364,18 @@ public class SimpleBrokerMessageHandler extends AbstractBrokerMessageHandler {
 					getClientOutboundChannel().send(reply);
 				}
 				catch (Throwable ex) {
-					logger.error("Failed to send " + message, ex);
+					if (logger.isErrorEnabled()) {
+						logger.error("Failed to send " + message, ex);
+					}
 				}
 				finally {
-					SessionInfo info = this.sessions.get(subscriptionEntry.getKey());
+					SessionInfo info = this.sessions.get(sessionId);
 					if (info != null) {
 						info.setLastWriteTime(now);
 					}
 				}
 			}
-		}
+		});
 	}
 
 	@Override

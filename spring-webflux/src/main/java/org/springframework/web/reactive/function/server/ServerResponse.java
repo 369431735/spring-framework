@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,15 +28,18 @@ import java.util.function.Consumer;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.codec.HttpMessageWriter;
 import org.springframework.http.codec.json.Jackson2CodecSupport;
 import org.springframework.http.server.reactive.ServerHttpResponse;
 import org.springframework.util.Assert;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.BodyInserter;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.result.view.ViewResolver;
@@ -48,6 +51,7 @@ import org.springframework.web.server.ServerWebExchange;
  * {@linkplain HandlerFilterFunction filter function}.
  *
  * @author Arjen Poutsma
+ * @author Juergen Hoeller
  * @author Sebastien Deleuze
  * @since 5.0
  */
@@ -64,6 +68,11 @@ public interface ServerResponse {
 	 * Return the headers of this response.
 	 */
 	HttpHeaders headers();
+
+	/**
+	 * Return the cookies of this response.
+	 */
+	MultiValueMap<String, ResponseCookie> cookies();
 
 	/**
 	 * Write this response to the given web exchange.
@@ -83,17 +92,26 @@ public interface ServerResponse {
 	 */
 	static BodyBuilder from(ServerResponse other) {
 		Assert.notNull(other, "Other ServerResponse must not be null");
-		DefaultServerResponseBuilder builder = new DefaultServerResponseBuilder(other.statusCode());
-		return builder.headers(headers -> headers.addAll(other.headers()));
+		return new DefaultServerResponseBuilder(other);
 	}
 
 	/**
-	 * Create a builder with the given status.
+	 * Create a builder with the given HTTP status.
 	 * @param status the response status
 	 * @return the created builder
 	 */
 	static BodyBuilder status(HttpStatus status) {
 		Assert.notNull(status, "HttpStatus must not be null");
+		return new DefaultServerResponseBuilder(status);
+	}
+
+	/**
+	 * Create a builder with the given HTTP status.
+	 * @param status the response status
+	 * @return the created builder
+	 * @since 5.0.3
+	 */
+	static BodyBuilder status(int status) {
 		return new DefaultServerResponseBuilder(status);
 	}
 
@@ -219,6 +237,24 @@ public interface ServerResponse {
 		B headers(Consumer<HttpHeaders> headersConsumer);
 
 		/**
+		 * Add the given cookie to the response.
+		 * @param cookie the cookie to add
+		 * @return this builder
+		 */
+		B cookie(ResponseCookie cookie);
+
+		/**
+		 * Manipulate this response's cookies with the given consumer. The
+		 * cookies provided to the consumer are "live", so that the consumer can be used to
+		 * {@linkplain MultiValueMap#set(Object, Object) overwrite} existing cookies,
+		 * {@linkplain MultiValueMap#remove(Object) remove} cookies, or use any of the other
+		 * {@link MultiValueMap} methods.
+		 * @param cookiesConsumer a function that consumes the cookies
+		 * @return this builder
+		 */
+		B cookies(Consumer<MultiValueMap<String, ResponseCookie>> cookiesConsumer);
+
+		/**
 		 * Set the set of allowed {@link HttpMethod HTTP methods}, as specified
 		 * by the {@code Allow} header.
 		 *
@@ -248,8 +284,6 @@ public interface ServerResponse {
 		/**
 		 * Set the time the resource was last changed, as specified by the
 		 * {@code Last-Modified} header.
-		 * <p>The date should be specified as the number of milliseconds since
-		 * January 1, 1970 GMT.
 		 * @param lastModified the last modified date
 		 * @return this builder
 		 * @see HttpHeaders#setLastModified(long)
@@ -353,6 +387,19 @@ public interface ServerResponse {
 		<T, P extends Publisher<T>> Mono<ServerResponse> body(P publisher, Class<T> elementClass);
 
 		/**
+		 * Set the body of the response to the given asynchronous {@code Publisher} and return it.
+		 * This convenience method combines {@link #body(BodyInserter)} and
+		 * {@link BodyInserters#fromPublisher(Publisher, Class)}.
+		 * @param publisher the {@code Publisher} to write to the response
+		 * @param typeReference a type reference describing the elements contained in the publisher
+		 * @param <T> the type of the elements contained in the publisher
+		 * @param <P> the type of the {@code Publisher}
+		 * @return the built response
+		 */
+		<T, P extends Publisher<T>> Mono<ServerResponse> body(P publisher,
+				ParameterizedTypeReference<T> typeReference);
+
+		/**
 		 * Set the body of the response to the given synchronous {@code Object} and return it.
 		 * This convenience method combines {@link #body(BodyInserter)} and
 		 * {@link BodyInserters#fromObject(Object)}.
@@ -410,6 +457,5 @@ public interface ServerResponse {
 		 */
 		List<ViewResolver> viewResolvers();
 	}
-
 
 }

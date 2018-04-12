@@ -42,7 +42,9 @@ class DeferredResultInterceptorChain {
 		this.interceptors = interceptors;
 	}
 
-	public void applyBeforeConcurrentHandling(NativeWebRequest request, DeferredResult<?> deferredResult) throws Exception {
+	public void applyBeforeConcurrentHandling(NativeWebRequest request, DeferredResult<?> deferredResult)
+			throws Exception {
+
 		for (DeferredResultProcessingInterceptor interceptor : this.interceptors) {
 			interceptor.beforeConcurrentHandling(request, deferredResult);
 		}
@@ -55,7 +57,9 @@ class DeferredResultInterceptorChain {
 		}
 	}
 
-	public Object applyPostProcess(NativeWebRequest request,  DeferredResult<?> deferredResult, Object concurrentResult) {
+	public Object applyPostProcess(NativeWebRequest request,  DeferredResult<?> deferredResult,
+			Object concurrentResult) {
+
 		try {
 			for (int i = this.preProcessingIndex; i >= 0; i--) {
 				this.interceptors.get(i).postProcess(request, deferredResult, concurrentResult);
@@ -78,15 +82,22 @@ class DeferredResultInterceptorChain {
 		}
 	}
 
-	public void triggerAfterError(NativeWebRequest request, DeferredResult<?> deferredResult, Throwable t) throws Exception {
+	/**
+	 * @return true to continue error handling, or false to bypass any further
+	 * error handling
+	 */
+	public boolean triggerAfterError(NativeWebRequest request, DeferredResult<?> deferredResult, Throwable ex)
+			throws Exception {
+
 		for (DeferredResultProcessingInterceptor interceptor : this.interceptors) {
 			if (deferredResult.isSetOrExpired()) {
-				return;
+				return false;
 			}
-			if (!interceptor.handleError(request, deferredResult, t)){
-				break;
+			if (!interceptor.handleError(request, deferredResult, ex)){
+				return false;
 			}
 		}
+		return true;
 	}
 
 	public void triggerAfterCompletion(NativeWebRequest request, DeferredResult<?> deferredResult) {

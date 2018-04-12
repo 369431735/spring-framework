@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import java.util.function.Consumer;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.client.reactive.ClientHttpRequest;
@@ -110,11 +111,7 @@ public interface ClientRequest {
 	 */
 	static Builder from(ClientRequest other) {
 		Assert.notNull(other, "'other' must not be null");
-		return new DefaultClientRequestBuilder(other.method(), other.url())
-				.headers(headers -> headers.addAll(other.headers()))
-				.cookies(cookies -> cookies.addAll(other.cookies()))
-				.attributes(attributes -> attributes.putAll(other.attributes()))
-				.body(other.body());
+		return new DefaultClientRequestBuilder(other);
 	}
 
 	/**
@@ -122,8 +119,20 @@ public interface ClientRequest {
 	 * @param method the HTTP method (GET, POST, etc)
 	 * @param url the URL
 	 * @return the created builder
+	 * @deprecated in favor of {@link #create(HttpMethod, URI)}
 	 */
+	@Deprecated
 	static Builder method(HttpMethod method, URI url) {
+		return new DefaultClientRequestBuilder(method, url);
+	}
+
+	/**
+	 * Create a request builder with the given method and url.
+	 * @param method the HTTP method (GET, POST, etc)
+	 * @param url the URL
+	 * @return the created builder
+	 */
+	static Builder create(HttpMethod method, URI url) {
 		return new DefaultClientRequestBuilder(method, url);
 	}
 
@@ -132,6 +141,22 @@ public interface ClientRequest {
 	 * Defines a builder for a request.
 	 */
 	interface Builder {
+
+		/**
+		 * Set the method of the request.
+		 * @param method the new method
+		 * @return this builder
+		 * @since 5.0.1
+		 */
+		Builder method(HttpMethod method);
+
+		/**
+		 * Set the url of the request.
+		 * @param url the new url
+		 * @return this builder
+		 * @since 5.0.1
+		 */
+		Builder url(URI url);
 
 		/**
 		 * Add the given header value(s) under the given name.
@@ -190,6 +215,17 @@ public interface ClientRequest {
 		<S, P extends Publisher<S>> Builder body(P publisher, Class<S> elementClass);
 
 		/**
+		 * Set the body of the request to the given {@code Publisher} and return it.
+		 * @param publisher the {@code Publisher} to write to the request
+		 * @param typeReference a type reference describing the elements contained in the publisher
+		 * @param <S> the type of the elements contained in the publisher
+		 * @param <P> the type of the {@code Publisher}
+		 * @return the built request
+		 */
+		<S, P extends Publisher<S>> Builder body(P publisher,
+				ParameterizedTypeReference<S> typeReference);
+
+		/**
 		 * Set the attribute with the given name to the given value.
 		 * @param name the name of the attribute to add
 		 * @param value the value of the attribute to add
@@ -207,8 +243,8 @@ public interface ClientRequest {
 		Builder attributes(Consumer<Map<String, Object>> attributesConsumer);
 
 		/**
-		 * Builds the request entity with no body.
-		 * @return the request entity
+		 * Builds the request.
+		 * @return the request
 		 */
 		ClientRequest build();
 	}

@@ -42,7 +42,7 @@ import org.springframework.web.util.WebUtils;
  */
 public class CookieThemeResolver extends CookieGenerator implements ThemeResolver {
 
-	public final static String ORIGINAL_DEFAULT_THEME_NAME = "theme";
+	public static final String ORIGINAL_DEFAULT_THEME_NAME = "theme";
 
 	/**
 	 * Name of the request attribute that holds the theme name. Only used
@@ -88,11 +88,14 @@ public class CookieThemeResolver extends CookieGenerator implements ThemeResolve
 		}
 
 		// Retrieve cookie value from request.
-		Cookie cookie = WebUtils.getCookie(request, getCookieName());
-		if (cookie != null) {
-			String value = cookie.getValue();
-			if (StringUtils.hasText(value)) {
-				themeName = value;
+		String cookieName = getCookieName();
+		if (cookieName != null) {
+			Cookie cookie = WebUtils.getCookie(request, cookieName);
+			if (cookie != null) {
+				String value = cookie.getValue();
+				if (StringUtils.hasText(value)) {
+					themeName = value;
+				}
 			}
 		}
 

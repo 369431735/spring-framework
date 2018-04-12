@@ -118,6 +118,7 @@ public class AppCacheManifestTransformer extends ResourceTransformerSupport {
 			logger.trace("Transforming resource: " + resource);
 		}
 
+		@SuppressWarnings("resource")
 		Scanner scanner = new Scanner(content);
 		LineInfo previous = null;
 		LineAggregator aggregator = new LineAggregator(resource, content);
@@ -195,7 +196,7 @@ public class AppCacheManifestTransformer extends ResourceTransformerSupport {
 		}
 
 		private static boolean hasScheme(String line) {
-			int index = line.indexOf(":");
+			int index = line.indexOf(':');
 			return (line.startsWith("//") || (index > 0 && !line.substring(0, index).contains("/")));
 		}
 

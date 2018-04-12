@@ -59,8 +59,7 @@ public class WebMvcStompEndpointRegistry implements StompEndpointRegistry {
 
 	private final StompSubProtocolHandler stompHandler;
 
-	private final List<WebMvcStompWebSocketEndpointRegistration> registrations =
-			new ArrayList<>();
+	private final List<WebMvcStompWebSocketEndpointRegistration> registrations = new ArrayList<>();
 
 
 	public WebMvcStompEndpointRegistry(WebSocketHandler webSocketHandler,
@@ -91,7 +90,7 @@ public class WebMvcStompEndpointRegistry implements StompEndpointRegistry {
 		WebSocketHandler actual = WebSocketHandlerDecorator.unwrap(handler);
 		if (!(actual instanceof SubProtocolWebSocketHandler)) {
 			throw new IllegalArgumentException("No SubProtocolWebSocketHandler in " + handler);
-		};
+		}
 		return (SubProtocolWebSocketHandler) actual;
 	}
 
@@ -125,7 +124,7 @@ public class WebMvcStompEndpointRegistry implements StompEndpointRegistry {
 	 * used to map handshake requests.
 	 */
 	@Override
-	public void setUrlPathHelper(UrlPathHelper urlPathHelper) {
+	public void setUrlPathHelper(@Nullable UrlPathHelper urlPathHelper) {
 		this.urlPathHelper = urlPathHelper;
 	}
 
@@ -151,11 +150,11 @@ public class WebMvcStompEndpointRegistry implements StompEndpointRegistry {
 		Map<String, Object> urlMap = new LinkedHashMap<>();
 		for (WebMvcStompWebSocketEndpointRegistration registration : this.registrations) {
 			MultiValueMap<HttpRequestHandler, String> mappings = registration.getMappings();
-			for (HttpRequestHandler httpHandler : mappings.keySet()) {
-				for (String pattern : mappings.get(httpHandler)) {
+			mappings.forEach((httpHandler, patterns) -> {
+				for (String pattern : patterns) {
 					urlMap.put(pattern, httpHandler);
 				}
-			}
+			});
 		}
 		WebSocketHandlerMapping hm = new WebSocketHandlerMapping();
 		hm.setUrlMap(urlMap);

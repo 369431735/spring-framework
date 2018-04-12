@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.springframework.http.server.reactive.PathContainer.UrlPathSegment;
+import org.springframework.http.server.PathContainer.PathSegment;
 import org.springframework.web.util.pattern.PathPattern.MatchingContext;
 
 /**
@@ -136,7 +136,7 @@ class RegexPathElement extends PathElement {
 		if (matches) {
 			if (isNoMorePattern()) {
 				if (matchingContext.determineRemainingPath && 
-					((this.variableNames.size() == 0) ? true : textToMatch.length() > 0)) {
+					(this.variableNames.isEmpty() ? true : textToMatch.length() > 0)) {
 					matchingContext.remainingPathIndex = pathIndex + 1;
 					matches = true;
 				}
@@ -145,7 +145,7 @@ class RegexPathElement extends PathElement {
 					// If pattern is capturing variables there must be some actual data to bind to them
 					matches = (pathIndex + 1) >= matchingContext.pathLength &&
 							  (this.variableNames.isEmpty() || textToMatch.length() > 0);
-					if (!matches && matchingContext.isAllowOptionalTrailingSlash()) {
+					if (!matches && matchingContext.isMatchOptionalTrailingSeparator()) {
 						matches = (this.variableNames.isEmpty() || textToMatch.length() > 0) &&
 							      (pathIndex + 2) >= matchingContext.pathLength &&
 							      matchingContext.isSeparator(pathIndex + 1);
@@ -153,9 +153,6 @@ class RegexPathElement extends PathElement {
 				}
 			}
 			else {
-				if (matchingContext.isMatchStartMatching && (pathIndex + 1 >= matchingContext.pathLength)) {
-					return true;  // no more data but matches up to this point
-				}
 				matches = (this.next != null && this.next.matches(pathIndex + 1, matchingContext));
 			}
 		}
@@ -173,7 +170,7 @@ class RegexPathElement extends PathElement {
 				String value = matcher.group(i);
 				matchingContext.set(name, value,
 						(i == this.variableNames.size())?
-								((UrlPathSegment)matchingContext.pathElements.get(pathIndex)).parameters():
+								((PathSegment)matchingContext.pathElements.get(pathIndex)).parameters():
 								NO_PARAMETERS);
 			}
 		}
@@ -189,6 +186,7 @@ class RegexPathElement extends PathElement {
 		return (this.regex.length - varsLength - this.variableNames.size());
 	}
 
+	@Override
 	public int getCaptureCount() {
 		return this.variableNames.size();
 	}

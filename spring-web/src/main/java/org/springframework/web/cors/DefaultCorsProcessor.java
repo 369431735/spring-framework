@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-201/ the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package org.springframework.web.cors;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -58,8 +59,8 @@ public class DefaultCorsProcessor implements CorsProcessor {
 
 	@Override
 	@SuppressWarnings("resource")
-	public boolean processRequest(@Nullable CorsConfiguration config, HttpServletRequest request, HttpServletResponse response)
-			throws IOException {
+	public boolean processRequest(@Nullable CorsConfiguration config, HttpServletRequest request,
+			HttpServletResponse response) throws IOException {
 
 		if (!CorsUtils.isCorsRequest(request)) {
 			return true;
@@ -119,6 +120,11 @@ public class DefaultCorsProcessor implements CorsProcessor {
 
 		String requestOrigin = request.getHeaders().getOrigin();
 		String allowOrigin = checkOrigin(config, requestOrigin);
+		HttpHeaders responseHeaders = response.getHeaders();
+
+		responseHeaders.addAll(HttpHeaders.VARY, Arrays.asList(HttpHeaders.ORIGIN,
+				HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS));
+
 		if (allowOrigin == null) {
 			logger.debug("Rejecting CORS request because '" + requestOrigin + "' origin is not allowed");
 			rejectRequest(response);
@@ -141,9 +147,7 @@ public class DefaultCorsProcessor implements CorsProcessor {
 			return false;
 		}
 
-		HttpHeaders responseHeaders = response.getHeaders();
 		responseHeaders.setAccessControlAllowOrigin(allowOrigin);
-		responseHeaders.add(HttpHeaders.VARY, HttpHeaders.ORIGIN);
 
 		if (preFlightRequest) {
 			responseHeaders.setAccessControlAllowMethods(allowMethods);

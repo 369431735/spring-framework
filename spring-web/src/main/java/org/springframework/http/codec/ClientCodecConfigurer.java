@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,22 +35,20 @@ import org.springframework.core.codec.Encoder;
  */
 public interface ClientCodecConfigurer extends CodecConfigurer {
 
-
 	@Override
 	ClientDefaultCodecs defaultCodecs();
 
 
 	/**
-	 * Creates a new instance of the {@code ClientCodecConfigurer}.
-	 * @return the created instance
+	 * Create a new instance of the {@code ClientCodecConfigurer}.
 	 */
 	static ClientCodecConfigurer create() {
-		return new DefaultClientCodecConfigurer();
+		return CodecConfigurerFactory.create(ClientCodecConfigurer.class);
 	}
 
 
 	/**
-	 * Extension of {@link DefaultCodecs} with extra client options.
+	 * Extension of {@link CodecConfigurer.DefaultCodecs} with extra client options.
 	 */
 	interface ClientDefaultCodecs extends DefaultCodecs {
 
@@ -70,6 +68,7 @@ public interface ClientCodecConfigurer extends CodecConfigurer {
 		 */
 		void serverSentEventDecoder(Decoder<?> decoder);
 	}
+
 
 	/**
 	 * Registry and container for multipart HTTP message writers.

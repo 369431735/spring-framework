@@ -17,11 +17,15 @@
 package org.springframework.http.server.reactive;
 
 import java.net.InetSocketAddress;
+import java.net.URI;
+import java.util.function.Consumer;
 
 import org.springframework.http.HttpCookie;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.ReactiveHttpInputMessage;
+import org.springframework.http.server.RequestPath;
 import org.springframework.lang.Nullable;
 import org.springframework.util.MultiValueMap;
 
@@ -55,8 +59,20 @@ public interface ServerHttpRequest extends HttpRequest, ReactiveHttpInputMessage
 	 * Return the remote address where this request is connected to, if available.
 	 */
 	@Nullable
-	InetSocketAddress getRemoteAddress();
+	default InetSocketAddress getRemoteAddress() {
+		return null;
+	}
 
+	/**
+	 * Return the SSL session information if the request has been transmitted
+	 * over a secure protocol including SSL certificates, if available.
+	 * @return the session information, or {@code null} if none available
+	 * @since 5.0.2
+	 */
+	@Nullable
+	default SslInfo getSslInfo() {
+		return null;
+	}
 
 	/**
 	 * Return a builder to mutate properties of this request by wrapping it
@@ -79,6 +95,11 @@ public interface ServerHttpRequest extends HttpRequest, ReactiveHttpInputMessage
 		Builder method(HttpMethod httpMethod);
 
 		/**
+		 * Set the URI to return.
+		 */
+		Builder uri(URI uri);
+
+		/**
 		 * Set the path to use instead of the {@code "rawPath"} of
 		 * {@link ServerHttpRequest#getURI()}.
 		 */
@@ -93,6 +114,17 @@ public interface ServerHttpRequest extends HttpRequest, ReactiveHttpInputMessage
 		 * Set or override the specified header.
 		 */
 		Builder header(String key, String value);
+
+		/**
+		 * Manipulate this request's headers with the given consumer. The
+		 * headers provided to the consumer are "live", so that the consumer can be used to
+		 * {@linkplain HttpHeaders#set(String, String) overwrite} existing header values,
+		 * {@linkplain HttpHeaders#remove(Object) remove} values, or use any of the other
+		 * {@link HttpHeaders} methods.
+		 * @param headersConsumer a function that consumes the {@code HttpHeaders}
+		 * @return this builder
+		 */
+		Builder headers(Consumer<HttpHeaders> headersConsumer);
 
 		/**
 		 * Build a {@link ServerHttpRequest} decorator with the mutated properties.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,6 +52,7 @@ import org.springframework.web.reactive.function.server.support.HandlerFunctionA
 import org.springframework.web.reactive.function.server.support.RouterFunctionMapping;
 import org.springframework.web.reactive.function.server.support.ServerResponseResultHandler;
 import org.springframework.web.reactive.handler.AbstractHandlerMapping;
+import org.springframework.web.reactive.handler.WebFluxResponseStatusExceptionHandler;
 import org.springframework.web.reactive.result.SimpleHandlerAdapter;
 import org.springframework.web.reactive.result.method.annotation.ArgumentResolverConfigurer;
 import org.springframework.web.reactive.result.method.annotation.RequestMappingHandlerAdapter;
@@ -62,7 +63,6 @@ import org.springframework.web.reactive.result.view.ViewResolutionResultHandler;
 import org.springframework.web.reactive.result.view.ViewResolver;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebExceptionHandler;
-import org.springframework.web.server.handler.ResponseStatusExceptionHandler;
 import org.springframework.web.server.i18n.AcceptHeaderLocaleContextResolver;
 import org.springframework.web.server.i18n.LocaleContextResolver;
 
@@ -90,7 +90,7 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 
 
 	@Override
-	public void setApplicationContext(ApplicationContext applicationContext) {
+	public void setApplicationContext(@Nullable ApplicationContext applicationContext) {
 		this.applicationContext = applicationContext;
 	}
 
@@ -108,7 +108,7 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 	@Bean
 	@Order(0)
 	public WebExceptionHandler responseStatusExceptionHandler() {
-		return new ResponseStatusExceptionHandler();
+		return new WebFluxResponseStatusExceptionHandler();
 	}
 
 	@Bean
@@ -192,7 +192,7 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 	public RouterFunctionMapping routerFunctionMapping() {
 		RouterFunctionMapping mapping = createRouterFunctionMapping();
 		mapping.setOrder(-1); // go before RequestMappingHandlerMapping
-		mapping.setMessageCodecConfigurer(serverCodecConfigurer());
+		mapping.setMessageReaders(serverCodecConfigurer().getReaders());
 		mapping.setCorsConfigurations(getCorsConfigurations());
 
 		return mapping;
@@ -247,7 +247,7 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 	@Bean
 	public RequestMappingHandlerAdapter requestMappingHandlerAdapter() {
 		RequestMappingHandlerAdapter adapter = createRequestMappingHandlerAdapter();
-		adapter.setMessageCodecConfigurer(serverCodecConfigurer());
+		adapter.setMessageReaders(serverCodecConfigurer().getReaders());
 		adapter.setWebBindingInitializer(getConfigurableWebBindingInitializer());
 		adapter.setReactiveAdapterRegistry(webFluxAdapterRegistry());
 
@@ -355,11 +355,8 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 					String name = "org.springframework.validation.beanvalidation.OptionalValidatorFactoryBean";
 					clazz = ClassUtils.forName(name, getClass().getClassLoader());
 				}
-				catch (ClassNotFoundException ex) {
-					throw new BeanInitializationException("Could not find default validator class", ex);
-				}
-				catch (LinkageError ex) {
-					throw new BeanInitializationException("Could not load default validator class", ex);
+				catch (ClassNotFoundException | LinkageError ex) {
+					throw new BeanInitializationException("Failed to resolve default validator class", ex);
 				}
 				validator = (Validator) BeanUtils.instantiateClass(clazz);
 			}
@@ -421,14 +418,10 @@ public class WebFluxConfigurationSupport implements ApplicationContextAware {
 
 	@Bean
 	public ServerResponseResultHandler serverResponseResultHandler() {
-		ViewResolverRegistry registry = getViewResolverRegistry();
-		List<ViewResolver> resolvers = registry.getViewResolvers();
-
+		List<ViewResolver> resolvers = getViewResolverRegistry().getViewResolvers();
 		ServerResponseResultHandler handler = new ServerResponseResultHandler();
-		handler.setMessageCodecConfigurer(serverCodecConfigurer());
+		handler.setMessageWriters(serverCodecConfigurer().getWriters());
 		handler.setViewResolvers(resolvers);
-		handler.setOrder(registry.getOrder() + 1);
-
 		return handler;
 	}
 

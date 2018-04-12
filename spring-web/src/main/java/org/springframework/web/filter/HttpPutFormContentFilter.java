@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.lang.Nullable;
 import org.springframework.util.Assert;
 import org.springframework.util.MultiValueMap;
+import org.springframework.util.StringUtils;
 
 /**
  * {@link javax.servlet.Filter} that makes form encoded data available through
@@ -98,12 +99,14 @@ public class HttpPutFormContentFilter extends OncePerRequestFilter {
 				}
 			};
 			MultiValueMap<String, String> formParameters = this.formConverter.read(null, inputMessage);
-			HttpServletRequest wrapper = new HttpPutFormContentRequestWrapper(request, formParameters);
-			filterChain.doFilter(wrapper, response);
+			if (!formParameters.isEmpty()) {
+				HttpServletRequest wrapper = new HttpPutFormContentRequestWrapper(request, formParameters);
+				filterChain.doFilter(wrapper, response);
+				return;
+			}
 		}
-		else {
-			filterChain.doFilter(request, response);
-		}
+
+		filterChain.doFilter(request, response);
 	}
 
 	private boolean isFormContentType(HttpServletRequest request) {
@@ -162,19 +165,19 @@ public class HttpPutFormContentFilter extends OncePerRequestFilter {
 		@Override
 		@Nullable
 		public String[] getParameterValues(String name) {
-			String[] queryParam = (super.getQueryString() != null ? super.getParameterValues(name) : null);
+			String[] parameterValues = super.getParameterValues(name);
 			List<String> formParam = this.formParameters.get(name);
 			if (formParam == null) {
-				return queryParam;
+				return parameterValues;
 			}
-			else if (queryParam == null) {
-				return formParam.toArray(new String[formParam.size()]);
+			if (parameterValues == null || getQueryString() == null) {
+				return StringUtils.toStringArray(formParam);
 			}
 			else {
-				List<String> result = new ArrayList<>(queryParam.length + formParam.size());
-				result.addAll(Arrays.asList(queryParam));
+				List<String> result = new ArrayList<>(parameterValues.length + formParam.size());
+				result.addAll(Arrays.asList(parameterValues));
 				result.addAll(formParam);
-				return result.toArray(new String[result.size()]);
+				return StringUtils.toStringArray(result);
 			}
 		}
 	}

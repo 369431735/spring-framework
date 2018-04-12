@@ -19,6 +19,7 @@ package org.springframework.jdbc.support;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.concurrent.TimeUnit;
 import javax.sql.DataSource;
 
 import org.apache.commons.logging.Log;
@@ -97,27 +98,28 @@ public class DatabaseStartupValidator implements InitializingBean {
 	 */
 	@Override
 	public void afterPropertiesSet() {
-		if (this.dataSource == null) {
-			throw new IllegalArgumentException("dataSource is required");
+		DataSource dataSource = this.dataSource;
+		if (dataSource == null) {
+			throw new IllegalArgumentException("Property 'dataSource' is required");
 		}
 		if (this.validationQuery == null) {
-			throw new IllegalArgumentException("validationQuery is required");
+			throw new IllegalArgumentException("Property 'validationQuery' is required");
 		}
 
 		try {
 			boolean validated = false;
 			long beginTime = System.currentTimeMillis();
-			long deadLine = beginTime + this.timeout * 1000;
+			long deadLine = beginTime + TimeUnit.SECONDS.toMillis(this.timeout);
 			SQLException latestEx = null;
 
 			while (!validated && System.currentTimeMillis() < deadLine) {
 				Connection con = null;
 				Statement stmt = null;
 				try {
-					con = this.dataSource.getConnection();
+					con = dataSource.getConnection();
 					if (con == null) {
 						throw new CannotGetJdbcConnectionException("Failed to execute validation query: " +
-								"DataSource returned null from getConnection(): " + this.dataSource);
+								"DataSource returned null from getConnection(): " + dataSource);
 					}
 					stmt = con.createStatement();
 					stmt.execute(this.validationQuery);
@@ -138,7 +140,7 @@ public class DatabaseStartupValidator implements InitializingBean {
 				}
 
 				if (!validated) {
-					Thread.sleep(this.interval * 1000);
+					Thread.sleep(TimeUnit.SECONDS.toMillis(this.interval));
 				}
 			}
 
@@ -147,7 +149,7 @@ public class DatabaseStartupValidator implements InitializingBean {
 						"Database has not started up within " + this.timeout + " seconds", latestEx);
 			}
 
-			float duration = (System.currentTimeMillis() - beginTime) / 1000;
+			float duration = (System.currentTimeMillis() - beginTime)*1f / 1000;
 			if (logger.isInfoEnabled()) {
 				logger.info("Database startup detected after " + duration + " seconds");
 			}

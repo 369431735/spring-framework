@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,6 +65,7 @@ import org.springframework.util.StringUtils;
  * @author Rob Harrop
  * @author Mark Fisher
  * @author Costin Leau
+ * @author Sebastien Deleuze
  * @since 2.0
  * @see #autowireConstructor
  * @see #instantiateUsingFactoryMethod
@@ -348,7 +349,6 @@ class ConstructorResolver {
 	 * method, or {@code null} if none (-> use constructor argument values from bean definition)
 	 * @return a BeanWrapper for the new instance
 	 */
-	@Nullable
 	public BeanWrapper instantiateUsingFactoryMethod(
 			final String beanName, final RootBeanDefinition mbd, @Nullable final Object[] explicitArgs) {
 
@@ -419,7 +419,7 @@ class ConstructorResolver {
 					candidateSet.add(candidate);
 				}
 			}
-			Method[] candidates = candidateSet.toArray(new Method[candidateSet.size()]);
+			Method[] candidates = candidateSet.toArray(new Method[0]);
 			AutowireUtils.sortFactoryMethods(candidates);
 
 			ConstructorArgumentValues resolvedValues = null;
@@ -434,9 +434,14 @@ class ConstructorResolver {
 			else {
 				// We don't have arguments passed in programmatically, so we need to resolve the
 				// arguments specified in the constructor arguments held in the bean definition.
-				ConstructorArgumentValues cargs = mbd.getConstructorArgumentValues();
-				resolvedValues = new ConstructorArgumentValues();
-				minNrOfArgs = resolveConstructorArguments(beanName, mbd, bw, cargs, resolvedValues);
+				if (mbd.hasConstructorArgumentValues()) {
+					ConstructorArgumentValues cargs = mbd.getConstructorArgumentValues();
+					resolvedValues = new ConstructorArgumentValues();
+					minNrOfArgs = resolveConstructorArguments(beanName, mbd, bw, cargs, resolvedValues);
+				}
+				else {
+					minNrOfArgs = 0;
+				}
 			}
 
 			LinkedList<UnsatisfiedDependencyException> causes = null;
@@ -447,7 +452,14 @@ class ConstructorResolver {
 				if (paramTypes.length >= minNrOfArgs) {
 					ArgumentsHolder argsHolder;
 
-					if (resolvedValues != null) {
+					if (explicitArgs != null){
+						// Explicit arguments given -> arguments length must match exactly.
+						if (paramTypes.length != explicitArgs.length) {
+							continue;
+						}
+						argsHolder = new ArgumentsHolder(explicitArgs);
+					}
+					else {
 						// Resolved constructor arguments: type conversion and/or autowiring necessary.
 						try {
 							String[] paramNames = null;
@@ -470,14 +482,6 @@ class ConstructorResolver {
 							causes.add(ex);
 							continue;
 						}
-					}
-
-					else {
-						// Explicit arguments given -> arguments length must match exactly.
-						if (paramTypes.length != explicitArgs.length) {
-							continue;
-						}
-						argsHolder = new ArgumentsHolder(explicitArgs);
 					}
 
 					int typeDiffWeight = (mbd.isLenientConstructorResolution() ?
@@ -522,7 +526,7 @@ class ConstructorResolver {
 						argTypes.add(arg != null ? arg.getClass().getSimpleName() : "null");
 					}
 				}
-				else {
+				else if (resolvedValues != null){
 					Set<ValueHolder> valueHolders = new LinkedHashSet<>(resolvedValues.getArgumentCount());
 					valueHolders.addAll(resolvedValues.getIndexedArgumentValues().values());
 					valueHolders.addAll(resolvedValues.getGenericArgumentValues());
@@ -576,9 +580,6 @@ class ConstructorResolver {
 						mbd, beanName, this.beanFactory, factoryBean, factoryMethodToUse, argsToUse);
 			}
 
-			if (beanInstance == null) {
-				return null;
-			}
 			bw.setBeanInstance(beanInstance);
 			return bw;
 		}
@@ -648,7 +649,7 @@ class ConstructorResolver {
 	 * given the resolved constructor argument values.
 	 */
 	private ArgumentsHolder createArgumentArray(
-			String beanName, RootBeanDefinition mbd, ConstructorArgumentValues resolvedValues,
+			String beanName, RootBeanDefinition mbd, @Nullable ConstructorArgumentValues resolvedValues,
 			BeanWrapper bw, Class<?>[] paramTypes, @Nullable String[] paramNames, Executable executable,
 			boolean autowiring) throws UnsatisfiedDependencyException {
 
@@ -663,13 +664,15 @@ class ConstructorResolver {
 			Class<?> paramType = paramTypes[paramIndex];
 			String paramName = (paramNames != null ? paramNames[paramIndex] : "");
 			// Try to find matching constructor argument value, either indexed or generic.
-			ConstructorArgumentValues.ValueHolder valueHolder =
-					resolvedValues.getArgumentValue(paramIndex, paramType, paramName, usedValueHolders);
-			// If we couldn't find a direct match and are not supposed to autowire,
-			// let's try the next generic, untyped argument value as fallback:
-			// it could match after type conversion (for example, String -> int).
-			if (valueHolder == null && (!autowiring || paramTypes.length == resolvedValues.getArgumentCount())) {
-				valueHolder = resolvedValues.getGenericArgumentValue(null, null, usedValueHolders);
+			ConstructorArgumentValues.ValueHolder valueHolder = null;
+			if (resolvedValues != null) {
+				valueHolder = resolvedValues.getArgumentValue(paramIndex, paramType, paramName, usedValueHolders);
+				// If we couldn't find a direct match and are not supposed to autowire,
+				// let's try the next generic, untyped argument value as fallback:
+				// it could match after type conversion (for example, String -> int).
+				if (valueHolder == null && (!autowiring || paramTypes.length == resolvedValues.getArgumentCount())) {
+					valueHolder = resolvedValues.getGenericArgumentValue(null, null, usedValueHolders);
+				}
 			}
 			if (valueHolder != null) {
 				// We found a potential match - let's give it a try.
@@ -799,8 +802,8 @@ class ConstructorResolver {
 	 * Template method for resolving the specified argument which is supposed to be autowired.
 	 */
 	@Nullable
-	protected Object resolveAutowiredArgument(
-			MethodParameter param, String beanName, @Nullable Set<String> autowiredBeanNames, TypeConverter typeConverter) {
+	protected Object resolveAutowiredArgument(MethodParameter param, String beanName,
+			@Nullable Set<String> autowiredBeanNames, TypeConverter typeConverter) {
 
 		if (InjectionPoint.class.isAssignableFrom(param.getParameterType())) {
 			InjectionPoint injectionPoint = currentInjectionPoint.get();
@@ -812,7 +815,6 @@ class ConstructorResolver {
 		return this.beanFactory.resolveDependency(
 				new DependencyDescriptor(param, true), beanName, autowiredBeanNames, typeConverter);
 	}
-
 
 	static InjectionPoint setCurrentInjectionPoint(@Nullable InjectionPoint injectionPoint) {
 		InjectionPoint old = currentInjectionPoint.get();
@@ -831,11 +833,11 @@ class ConstructorResolver {
 	 */
 	private static class ArgumentsHolder {
 
-		public final Object rawArguments[];
+		public final Object[] rawArguments;
 
-		public final Object arguments[];
+		public final Object[] arguments;
 
-		public final Object preparedArguments[];
+		public final Object[] preparedArguments;
 
 		public boolean resolveNecessary = false;
 

@@ -83,7 +83,7 @@ class ReactiveTypeHandler {
 
 
 	public ReactiveTypeHandler() {
-		this(new ReactiveAdapterRegistry(), new SyncTaskExecutor(), new ContentNegotiationManager());
+		this(ReactiveAdapterRegistry.getSharedInstance(), new SyncTaskExecutor(), new ContentNegotiationManager());
 	}
 
 	ReactiveTypeHandler(ReactiveAdapterRegistry registry, TaskExecutor executor,
@@ -174,7 +174,7 @@ class ReactiveTypeHandler {
 	}
 
 
-	private static abstract class AbstractEmitterSubscriber implements Subscriber<Object>, Runnable {
+	private abstract static class AbstractEmitterSubscriber implements Subscriber<Object>, Runnable {
 
 		private final ResponseBodyEmitter emitter;
 

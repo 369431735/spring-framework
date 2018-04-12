@@ -27,7 +27,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hamcrest.Matchers;
 import org.junit.Test;
-import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.MonoProcessor;
@@ -64,7 +63,7 @@ public class WebSocketIntegrationTests extends AbstractWebSocketIntegrationTests
 		Flux<String> input = Flux.range(1, count).map(index -> "msg-" + index);
 		ReplayProcessor<Object> output = ReplayProcessor.create(count);
 
-		client.execute(getUrl("/echo"),
+		this.client.execute(getUrl("/echo"),
 				session -> {
 					logger.debug("Starting to send messages");
 					return session
@@ -73,7 +72,7 @@ public class WebSocketIntegrationTests extends AbstractWebSocketIntegrationTests
 							.subscribeWith(output)
 							.doOnNext(s -> logger.debug("inbound " + s))
 							.then()
-							.doOnTerminate((aVoid, ex) ->
+							.doOnSuccessOrError((aVoid, ex) ->
 									logger.debug("Done with " + (ex != null ? ex.getMessage() : "success")));
 				})
 				.block(Duration.ofMillis(5000));
@@ -88,7 +87,7 @@ public class WebSocketIntegrationTests extends AbstractWebSocketIntegrationTests
 		AtomicReference<HandshakeInfo> infoRef = new AtomicReference<>();
 		MonoProcessor<Object> output = MonoProcessor.create();
 
-		client.execute(getUrl("/sub-protocol"),
+		this.client.execute(getUrl("/sub-protocol"),
 				new WebSocketHandler() {
 					@Override
 					public List<String> getSubProtocols() {
@@ -118,7 +117,7 @@ public class WebSocketIntegrationTests extends AbstractWebSocketIntegrationTests
 		headers.add("my-header", "my-value");
 		MonoProcessor<Object> output = MonoProcessor.create();
 
-		client.execute(getUrl("/custom-header"), headers,
+		this.client.execute(getUrl("/custom-header"), headers,
 				session -> session.receive()
 						.map(WebSocketMessage::getPayloadAsText)
 						.subscribeWith(output)
@@ -168,7 +167,7 @@ public class WebSocketIntegrationTests extends AbstractWebSocketIntegrationTests
 		public Mono<Void> handle(WebSocketSession session) {
 			String protocol = session.getHandshakeInfo().getSubProtocol();
 			WebSocketMessage message = session.textMessage(protocol);
-			return doSend(session, Mono.just(message));
+			return session.send(Mono.just(message));
 		}
 	}
 
@@ -180,16 +179,8 @@ public class WebSocketIntegrationTests extends AbstractWebSocketIntegrationTests
 			HttpHeaders headers = session.getHandshakeInfo().getHeaders();
 			String payload = "my-header:" + headers.getFirst("my-header");
 			WebSocketMessage message = session.textMessage(payload);
-			return doSend(session, Mono.just(message));
+			return session.send(Mono.just(message));
 		}
-	}
-
-
-	// TODO: workaround for suspected RxNetty WebSocket client issue
-	// https://github.com/ReactiveX/RxNetty/issues/560
-
-	private static Mono<Void> doSend(WebSocketSession session, Publisher<WebSocketMessage> output) {
-		return session.send(Mono.delay(Duration.ofMillis(100)).thenMany(output));
 	}
 
 }

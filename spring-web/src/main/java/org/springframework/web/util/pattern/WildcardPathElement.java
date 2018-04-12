@@ -16,8 +16,8 @@
 
 package org.springframework.web.util.pattern;
 
-import org.springframework.http.server.reactive.PathContainer;
-import org.springframework.http.server.reactive.PathContainer.Element;
+import org.springframework.http.server.PathContainer;
+import org.springframework.http.server.PathContainer.Element;
 import org.springframework.web.util.pattern.PathPattern.MatchingContext;
 
 /**
@@ -65,7 +65,7 @@ class WildcardPathElement extends PathElement {
 					return true;
 				}
 				else {
-					return (matchingContext.isAllowOptionalTrailingSlash() &&  // if optional slash is on...
+					return (matchingContext.isMatchOptionalTrailingSeparator() &&  // if optional slash is on...
 							segmentData != null && segmentData.length() > 0 &&  // and there is at least one character to match the *...
 							(pathIndex + 1) == matchingContext.pathLength &&   // and the next path element is the end of the candidate...
 							matchingContext.isSeparator(pathIndex));  // and the final element is a separator
@@ -73,9 +73,6 @@ class WildcardPathElement extends PathElement {
 			}
 		}
 		else { 
-			if (matchingContext.isMatchStartMatching && pathIndex == matchingContext.pathLength) {
-				return true; // no more data but matches up to this point
-			}
 			// Within a path (e.g. /aa/*/bb) there must be at least one character to match the wildcard
 			if (segmentData == null || segmentData.length() == 0) {
 				return false;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2002-2017 the original author or authors.
+ * Copyright 2002-2018 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,22 +51,20 @@ import org.springframework.util.ObjectUtils;
 import org.springframework.util.StringUtils;
 
 /**
- * Base class for caching aspects, such as the {@link CacheInterceptor}
- * or an AspectJ aspect.
+ * Base class for caching aspects, such as the {@link CacheInterceptor} or an
+ * AspectJ aspect.
  *
- * <p>This enables the underlying Spring caching infrastructure to be
- * used easily to implement an aspect for any aspect system.
+ * <p>This enables the underlying Spring caching infrastructure to be used easily
+ * to implement an aspect for any aspect system.
  *
- * <p>Subclasses are responsible for calling methods in this class in
- * the correct order.
+ * <p>Subclasses are responsible for calling relevant methods in the correct order.
  *
- * <p>Uses the <b>Strategy</b> design pattern. A {@link CacheResolver}
- * implementation will resolve the actual cache(s) to use, and a
- * {@link CacheOperationSource} is used for determining caching
- * operations.
+ * <p>Uses the <b>Strategy</b> design pattern. A {@link CacheOperationSource} is
+ * used for determining caching operations, a {@link KeyGenerator} will build the
+ * cache keys, and a {@link CacheResolver} will resolve the actual cache(s) to use.
  *
- * <p>A cache aspect is serializable if its {@code CacheResolver} and
- * {@code CacheOperationSource} are serializable.
+ * <p>Note: A cache aspect is serializable but does not perform any actual caching
+ * after deserialization.
  *
  * @author Costin Leau
  * @author Juergen Hoeller
@@ -81,17 +79,19 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 
 	protected final Log logger = LogFactory.getLog(getClass());
 
-	private final Map<CacheOperationCacheKey, CacheOperationMetadata> metadataCache =
-			new ConcurrentHashMap<>(1024);
+	private final Map<CacheOperationCacheKey, CacheOperationMetadata> metadataCache = new ConcurrentHashMap<>(1024);
 
 	private final CacheOperationExpressionEvaluator evaluator = new CacheOperationExpressionEvaluator();
 
+	@Nullable
 	private CacheOperationSource cacheOperationSource;
 
 	private KeyGenerator keyGenerator = new SimpleKeyGenerator();
 
+	@Nullable
 	private CacheResolver cacheResolver;
 
+	@Nullable
 	private BeanFactory beanFactory;
 
 	private boolean initialized = false;
@@ -119,7 +119,7 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 	/**
 	 * Set the default {@link KeyGenerator} that this cache aspect should delegate to
 	 * if no specific key generator has been set for the operation.
-	 * <p>The default is a {@link SimpleKeyGenerator}
+	 * <p>The default is a {@link SimpleKeyGenerator}.
 	 */
 	public void setKeyGenerator(KeyGenerator keyGenerator) {
 		this.keyGenerator = keyGenerator;
@@ -133,25 +133,14 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 	}
 
 	/**
-	 * Set the {@link CacheManager} to use to create a default {@link CacheResolver}.
-	 * Replace the current {@link CacheResolver}, if any.
-	 * @see #setCacheResolver(CacheResolver)
-	 * @see SimpleCacheResolver
-	 */
-	public void setCacheManager(CacheManager cacheManager) {
-		this.cacheResolver = new SimpleCacheResolver(cacheManager);
-	}
-
-	/**
 	 * Set the default {@link CacheResolver} that this cache aspect should delegate
 	 * to if no specific cache resolver has been set for the operation.
 	 * <p>The default resolver resolves the caches against their names and the
 	 * default cache manager.
-	 * @see #setCacheManager(org.springframework.cache.CacheManager)
+	 * @see #setCacheManager
 	 * @see SimpleCacheResolver
 	 */
-	public void setCacheResolver(CacheResolver cacheResolver) {
-		Assert.notNull(cacheResolver, "CacheResolver must not be null");
+	public void setCacheResolver(@Nullable CacheResolver cacheResolver) {
 		this.cacheResolver = cacheResolver;
 	}
 
@@ -161,6 +150,16 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 	@Nullable
 	public CacheResolver getCacheResolver() {
 		return this.cacheResolver;
+	}
+
+	/**
+	 * Set the {@link CacheManager} to use to create a default {@link CacheResolver}.
+	 * Replace the current {@link CacheResolver}, if any.
+	 * @see #setCacheResolver
+	 * @see SimpleCacheResolver
+	 */
+	public void setCacheManager(CacheManager cacheManager) {
+		this.cacheResolver = new SimpleCacheResolver(cacheManager);
 	}
 
 	/**
@@ -184,6 +183,7 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 	public void afterSingletonsInstantiated() {
 		if (getCacheResolver() == null) {
 			// Lazily initialize cache resolver via default cache manager...
+			Assert.state(this.beanFactory != null, "CacheResolver or BeanFactory must be set on cache aspect");
 			try {
 				setCacheManager(this.beanFactory.getBean(CacheManager.class));
 			}
@@ -287,6 +287,10 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 	 * @see CacheOperation#cacheResolver
 	 */
 	protected <T> T getBean(String beanName, Class<T> expectedType) {
+		if (this.beanFactory == null) {
+			throw new IllegalStateException(
+					"BeanFactory must be set on cache aspect for " + expectedType.getSimpleName() + " retrieval");
+		}
 		return BeanFactoryAnnotationUtils.qualifiedBeanOfType(this.beanFactory, expectedType, beanName);
 	}
 
@@ -343,9 +347,7 @@ public abstract class CacheAspectSupport extends AbstractCacheInvoker
 				Object key = generateKey(context, CacheOperationExpressionEvaluator.NO_RESULT);
 				Cache cache = context.getCaches().iterator().next();
 				try {
-					return wrapCacheValue(method, cache.get(key, () -> {
-						return unwrapReturnValue(invokeOperation(invoker));
-					}));
+					return wrapCacheValue(method, cache.get(key, () -> unwrapReturnValue(invokeOperation(invoker))));
 				}
 				catch (Cache.ValueRetrievalException ex) {
 					// The invoker wraps any Throwable in a ThrowableWrapper instance so we
